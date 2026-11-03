@@ -16,7 +16,7 @@ const pool = new Pool({
     user: 'postgres',
     host: 'localhost',
     database: 'vitacare',
-    password: 'postgres',
+    password: 'root',
     port: 5432,
 })
 

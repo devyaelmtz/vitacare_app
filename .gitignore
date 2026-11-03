@@ -44,6 +44,12 @@ app.*.map.json
 
 # Flutter por defecto ignora build/, .dart_tool/, etc.
 
-# Ignorar archivos del backend en Node.js
+# Flutter
+.dart_tool/
+.idea/
+.vscode/
+build/
+
+# Node.js Backend
 backend-vitacare/node_modules/
 backend-vitacare/.env
