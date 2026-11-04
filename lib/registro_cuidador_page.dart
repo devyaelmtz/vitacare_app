@@ -1,3 +1,4 @@
+import 'components/selector_usuario.dart';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -21,7 +22,6 @@ class _RegistroCuidadorPageState extends State<RegistroCuidadorPage> {
   final TextEditingController apmController = TextEditingController();
   final TextEditingController telefonoController = TextEditingController();
   final TextEditingController emailController = TextEditingController();
-  final TextEditingController passwordController = TextEditingController();
 
   final TextEditingController numeroLicenciaController =
       TextEditingController();
@@ -29,7 +29,7 @@ class _RegistroCuidadorPageState extends State<RegistroCuidadorPage> {
       TextEditingController();
 
   // Bandera para la contraseña
-  bool mostrarPassword = false;
+  int? _usuarioId;
   bool _estaCargando = false;
 
   @override
@@ -40,7 +40,6 @@ class _RegistroCuidadorPageState extends State<RegistroCuidadorPage> {
       apmController,
       telefonoController,
       emailController,
-      passwordController,
       numeroLicenciaController,
       parentescoRelacionController,
     ]) {
@@ -51,16 +50,9 @@ class _RegistroCuidadorPageState extends State<RegistroCuidadorPage> {
 
   Future<void> _registrarCuidador() async {
     if (!ApiSession.isAdmin || _estaCargando) return;
-    if ([
-      nombreController,
-      appController,
-      apmController,
-      telefonoController,
-      emailController,
-      passwordController,
-    ].any((c) => c.text.trim().isEmpty)) {
+    if (_usuarioId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Completa todos los datos personales.')),
+        const SnackBar(content: Text('Selecciona un usuario registrado.')),
       );
       return;
     }
@@ -73,12 +65,7 @@ class _RegistroCuidadorPageState extends State<RegistroCuidadorPage> {
         Uri.parse('$host/api/cuidadores'),
         headers: ApiSession.headers,
         body: jsonEncode({
-          'email': emailController.text.trim(),
-          'password': passwordController.text,
-          'nombre': nombreController.text.trim(),
-          'app': appController.text.trim(),
-          'apm': apmController.text.trim(),
-          'telefono': telefonoController.text.trim(),
+          'usuario_id': _usuarioId,
           'numeroLicencia': numeroLicenciaController.text.trim(),
           'parentescoRelacion': parentescoRelacionController.text.trim(),
         }),
@@ -133,6 +120,20 @@ class _RegistroCuidadorPageState extends State<RegistroCuidadorPage> {
         children: [
           _crearTitulo('Datos del Cuidador', Colors.blueAccent),
           _crearSizedBox(20),
+          SelectorUsuario(
+            enabled: !_estaCargando,
+            onSelected: (user) {
+              setState(() {
+                _usuarioId = user.id;
+                nombreController.text = user.nombre;
+                appController.text = user.app;
+                apmController.text = user.apm;
+                telefonoController.text = user.telefono;
+                emailController.text = user.email;
+              });
+            },
+          ),
+          _crearSizedBox(20),
           _crearCampoTexto(
             'Nombre(s)',
             'Ingresa tu nombre',
@@ -173,7 +174,6 @@ class _RegistroCuidadorPageState extends State<RegistroCuidadorPage> {
             TextInputType.emailAddress,
           ),
           _crearSizedBox(15),
-          _crearCampoPassword(),
           _crearSizedBox(30),
           _crearTitulo('Información Profesional', Colors.blueAccent),
           _crearSizedBox(20),
@@ -226,32 +226,19 @@ class _RegistroCuidadorPageState extends State<RegistroCuidadorPage> {
   ) {
     return TextField(
       controller: controller,
+      readOnly: [
+        nombreController,
+        appController,
+        apmController,
+        telefonoController,
+        emailController
+      ].contains(controller),
       keyboardType: tipoTeclado,
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
         prefixIcon: Icon(icono),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-      ),
-    );
-  }
-
-  Widget _crearCampoPassword() {
-    return TextField(
-      controller: passwordController,
-      obscureText: !mostrarPassword,
-      decoration: InputDecoration(
-        labelText: 'Contraseña',
-        prefixIcon: const Icon(Icons.lock),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-        suffixIcon: IconButton(
-          icon: Icon(mostrarPassword ? Icons.visibility : Icons.visibility_off),
-          onPressed: () {
-            setState(() {
-              mostrarPassword = !mostrarPassword;
-            });
-          },
-        ),
       ),
     );
   }

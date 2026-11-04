@@ -1,3 +1,4 @@
+import 'components/selector_usuario.dart';
 import 'dart:convert';
 
 import 'services/api_session.dart';
@@ -20,7 +21,6 @@ class _RegistroPacientePageState extends State<RegistroPacientePage> {
   final TextEditingController apmController = TextEditingController();
   final TextEditingController telefonoController = TextEditingController();
   final TextEditingController emailController = TextEditingController();
-  final TextEditingController passwordController = TextEditingController();
 
   final TextEditingController fechaNacController = TextEditingController();
   final TextEditingController contactoEmergenciaController =
@@ -28,14 +28,14 @@ class _RegistroPacientePageState extends State<RegistroPacientePage> {
   final TextEditingController telEmergenciaController = TextEditingController();
 
   // Banderas de estado
-  bool mostrarPassword = false;
+  int? _usuarioId;
   bool _estaCargando = false;
 
   // Ajuste de IP dinámico: 10.0.2.2 para emuladores de Android
   String get hostUrl =>
       (!kIsWeb && defaultTargetPlatform == TargetPlatform.android)
-      ? 'http://10.0.2.2:3000'
-      : 'http://localhost:3000';
+          ? 'http://10.0.2.2:3000'
+          : 'http://localhost:3000';
 
   @override
   void dispose() {
@@ -44,7 +44,6 @@ class _RegistroPacientePageState extends State<RegistroPacientePage> {
     apmController.dispose();
     telefonoController.dispose();
     emailController.dispose();
-    passwordController.dispose();
     fechaNacController.dispose();
     contactoEmergenciaController.dispose();
     telEmergenciaController.dispose();
@@ -55,12 +54,7 @@ class _RegistroPacientePageState extends State<RegistroPacientePage> {
   Future<void> _registrarPaciente() async {
     if (!ApiSession.isAdmin || _estaCargando) return;
     // Validación de campos obligatorios
-    if (nombreController.text.isEmpty ||
-        emailController.text.isEmpty ||
-        passwordController.text.isEmpty ||
-        telefonoController.text.isEmpty ||
-        appController.text.trim().isEmpty ||
-        apmController.text.trim().isEmpty ||
+    if (_usuarioId == null ||
         fechaNacController.text.trim().isEmpty ||
         contactoEmergenciaController.text.trim().isEmpty ||
         telEmergenciaController.text.trim().isEmpty) {
@@ -80,13 +74,7 @@ class _RegistroPacientePageState extends State<RegistroPacientePage> {
         Uri.parse('$hostUrl/api/pacientes'),
         headers: ApiSession.headers,
         body: jsonEncode({
-          'email': emailController.text.trim(),
-          'password': passwordController.text,
-          'nombre': nombreController.text.trim(),
-          'app': appController.text.trim(),
-          'apm': apmController.text.trim(),
-          'telefono': telefonoController.text.trim(),
-          'rol': 'PACIENTE',
+          'usuario_id': _usuarioId,
           'fechaNac': fechaNacController.text.trim(),
           'contactoEmergencia': contactoEmergenciaController.text.trim(),
           'telefonoEmergencia': telEmergenciaController.text.trim(),
@@ -136,7 +124,7 @@ class _RegistroPacientePageState extends State<RegistroPacientePage> {
             onPressed: () {
               Navigator.pop(context); // Cierra la alerta
               if (!esError) {
-                Navigator.pop(context); // Si fue éxito, regresa al Login
+                Navigator.pop(context); // Si fue éxito, regresa a la selección
               }
             },
             child: const Text('Entendido'),
@@ -173,6 +161,20 @@ class _RegistroPacientePageState extends State<RegistroPacientePage> {
           child: Column(
             children: [
               _crearTitulo('Datos del Paciente', Colors.red),
+              _crearSizedBox(20),
+              SelectorUsuario(
+                enabled: !_estaCargando,
+                onSelected: (user) {
+                  setState(() {
+                    _usuarioId = user.id;
+                    nombreController.text = user.nombre;
+                    appController.text = user.app;
+                    apmController.text = user.apm;
+                    telefonoController.text = user.telefono;
+                    emailController.text = user.email;
+                  });
+                },
+              ),
               _crearSizedBox(20),
               _crearCampoTexto(
                 'Nombre(s)',
@@ -214,7 +216,6 @@ class _RegistroPacientePageState extends State<RegistroPacientePage> {
                 TextInputType.emailAddress,
               ),
               _crearSizedBox(15),
-              _crearCampoPassword(),
 
               _crearSizedBox(30),
 
@@ -278,32 +279,19 @@ class _RegistroPacientePageState extends State<RegistroPacientePage> {
   ) {
     return TextField(
       controller: controller,
+      readOnly: [
+        nombreController,
+        appController,
+        apmController,
+        telefonoController,
+        emailController
+      ].contains(controller),
       keyboardType: tipoTeclado,
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
         prefixIcon: Icon(icono),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-      ),
-    );
-  }
-
-  Widget _crearCampoPassword() {
-    return TextField(
-      controller: passwordController,
-      obscureText: !mostrarPassword,
-      decoration: InputDecoration(
-        labelText: 'Contraseña',
-        prefixIcon: const Icon(Icons.lock),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-        suffixIcon: IconButton(
-          icon: Icon(mostrarPassword ? Icons.visibility : Icons.visibility_off),
-          onPressed: () {
-            setState(() {
-              mostrarPassword = !mostrarPassword;
-            });
-          },
-        ),
       ),
     );
   }

@@ -17,12 +17,18 @@ samples, guidance on mobile development, and a full API reference.
 
 ## Flujo de registro VitaCare
 
-- **Crear cuenta** abre `RegistroUsuarioPage` y envía los siete campos editables a
+- **Crear cuenta** abre `RegistroUsuarioPage` y envía los seis datos base a
   `POST /api/users`; el servidor genera `id`. Solo se crea una fila en `users`.
-  El registro público admite roles `PACIENTE` y `CUIDADOR`; no concede el rol `ADMIN`.
+  El servidor asigna siempre el rol base `PACIENTE`, ignorando cualquier rol enviado
+  por el cliente. El login solo solicita correo y contraseña.
 - Un administrador existente inicia sesión para abrir el dashboard. El botón
   **Registrar Paciente / Cuidador** abre el módulo avanzado. `POST /api/pacientes`
-  y `POST /api/cuidadores` guardan cuenta y perfil en una transacción PostgreSQL.
+  y `POST /api/cuidadores` reciben `usuario_id` de una cuenta existente y los datos
+  médicos/profesionales. Cada formulario obtiene los usuarios de `GET /api/users`
+  y autocompleta sus datos base en campos de solo lectura, sin pedir contraseña.
+  La transacción ejecuta `UPDATE users SET rol = ...` e `INSERT` en el perfil;
+  no crea otra cuenta. Si el usuario no existe responde 404; un perfil duplicado
+  responde 409. Cualquier fallo revierte también el cambio de rol.
 - `POST /api/login` devuelve `token`, utilizado como `Authorization: Bearer <token>`
   para altas avanzadas y modificaciones/eliminaciones de usuarios. Las sesiones
   duran ocho horas, se conservan en memoria y requieren otro login al reiniciar

@@ -84,7 +84,7 @@ const userValues = (body, rol) => [nextId(), ...baseFields.map(field =>
     field === 'password' ? body[field] : body[field].trim()), rol]
 function registrationError(res, error) {
     if (error.code === '23505') return res.status(409).json({ error: 'El correo ya está registrado' })
-    if (['22007', '22008', '22001', '22P02', '23502'].includes(error.code)) {
+    if (['22007', '22008', '22001', '22003', '22P02', '23502'].includes(error.code)) {
         return res.status(400).json({ error: 'Revisa los datos del registro' })
     }
     console.error(error)
@@ -94,10 +94,10 @@ function registrationError(res, error) {
 // Registro público: crea exclusivamente la cuenta base, nunca perfiles ni administradores.
 app.post('/api/users', async (req, res) => {
     try {
-        if (!validBase(req.body) || !['PACIENTE', 'CUIDADOR'].includes(req.body.rol)) {
-            return res.status(400).json({ error: 'Completa los datos y selecciona PACIENTE o CUIDADOR' })
+        if (!validBase(req.body)) {
+            return res.status(400).json({ error: 'Completa los datos de la cuenta' })
         }
-        const result = await pool.query(insertUser, userValues(req.body, req.body.rol))
+        const result = await pool.query(insertUser, userValues(req.body, 'PACIENTE'))
         const { password, ...user } = result.rows[0]
         res.status(201).json({ status: 'success', user })
     } catch (error) {
@@ -105,22 +105,28 @@ app.post('/api/users', async (req, res) => {
     }
 })
 
-// Una única conexión garantiza que cuenta y perfil se guarden de forma atómica.
+// Una única conexión actualiza el rol y vincula el perfil al usuario existente.
 for (const tipo of ['pacientes', 'cuidadores']) {
     app.post(`/api/${tipo}`, requireAdmin, async (req, res) => {
         let client
         try {
             const body = req.body
-            if (!validBase(body) || (tipo === 'pacientes' &&
+            if (!body || !/^[1-9][0-9]*$/.test(String(body.usuario_id ?? '')) ||
+                (tipo === 'pacientes' &&
                 !['fechaNac', 'contactoEmergencia', 'telefonoEmergencia'].every(
                     field => typeof body[field] === 'string' && body[field].trim()))) {
                 return res.status(400).json({ error: 'Completa todos los campos obligatorios' })
             }
             client = await pool.connect()
             await client.query('BEGIN')
-            const result = await client.query(insertUser,
-                userValues(body, tipo === 'pacientes' ? 'PACIENTE' : 'CUIDADOR'))
-            const { password, ...user } = result.rows[0]
+            const result = await client.query(`UPDATE users SET rol = $1 WHERE id = $2
+                RETURNING id, email, nombre, app, apm, telefono, rol`,
+                [tipo === 'pacientes' ? 'PACIENTE' : 'CUIDADOR', body.usuario_id])
+            if (!result.rowCount) {
+                await client.query('ROLLBACK')
+                return res.status(404).json({ error: 'Usuario no encontrado' })
+            }
+            const user = result.rows[0]
             if (tipo === 'pacientes') {
                 await client.query(`INSERT INTO pacientes
                     (usuario_id, fecha_nac, contacto_emergencia, telefono_emergencia)
@@ -135,6 +141,9 @@ for (const tipo of ['pacientes', 'cuidadores']) {
             res.status(201).json({ status: 'success', user })
         } catch (error) {
             if (client) await client.query('ROLLBACK')
+            if (error.code === '23505') {
+                return res.status(409).json({ error: 'Este usuario ya tiene un perfil de este tipo' })
+            }
             registrationError(res, error)
         } finally {
             if (client) client.release()

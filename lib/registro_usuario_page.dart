@@ -25,7 +25,6 @@ class _RegistroUsuarioPageState extends State<RegistroUsuarioPage> {
     ])
       field: TextEditingController(),
   };
-  String _rol = 'PACIENTE';
   bool _cargando = false;
   bool _mostrarPassword = false;
 
@@ -52,7 +51,6 @@ class _RegistroUsuarioPageState extends State<RegistroUsuarioPage> {
             field: field == 'password'
                 ? _controllers[field]!.text
                 : _controllers[field]!.text.trim(),
-          'rol': _rol,
         }),
       );
       if (!mounted) return;
@@ -159,28 +157,6 @@ class _RegistroUsuarioPageState extends State<RegistroUsuarioPage> {
                     ),
                     const SizedBox(height: 15),
                   ],
-                  DropdownButtonFormField<String>(
-                    initialValue: _rol,
-                    decoration: InputDecoration(
-                      labelText: 'Rol',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    items: const [
-                      DropdownMenuItem(
-                        value: 'PACIENTE',
-                        child: Text('Paciente'),
-                      ),
-                      DropdownMenuItem(
-                        value: 'CUIDADOR',
-                        child: Text('Cuidador'),
-                      ),
-                    ],
-                    onChanged: (value) {
-                      if (value != null) setState(() => _rol = value);
-                    },
-                  ),
                   const SizedBox(height: 35),
                   SizedBox(
                     height: 55,

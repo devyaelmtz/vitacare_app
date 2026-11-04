@@ -22,12 +22,9 @@ class _LoginViewState extends State<LoginView> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
-  String _selectedRol = 'PACIENTE';
   bool _estaCargando = false;
   bool mostrarPassword = false;
   bool _recordarme = true;
-
-  final List<String> _roles = ['PACIENTE', 'CUIDADOR', 'ADMIN'];
 
   String get hostUrl =>
       (!kIsWeb && defaultTargetPlatform == TargetPlatform.android)
@@ -183,7 +180,6 @@ class _LoginViewState extends State<LoginView> {
                 _crearSizedBox(20),
                 _crearCampoPassword(),
                 _crearSizedBox(20),
-                _crearCampoRol(),
                 _crearSizedBox(10),
                 _crearOpciones(),
                 _crearSizedBox(20),
@@ -263,21 +259,6 @@ class _LoginViewState extends State<LoginView> {
         if (value == null || value.isEmpty) return 'Ingresa tu contraseña';
         return null;
       },
-    );
-  }
-
-  Widget _crearCampoRol() {
-    return DropdownButtonFormField<String>(
-      initialValue: _selectedRol,
-      decoration: InputDecoration(
-        labelText: 'Tipo de Usuario',
-        prefixIcon: const Icon(Icons.manage_accounts),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-      ),
-      items: _roles
-          .map((rol) => DropdownMenuItem(value: rol, child: Text(rol)))
-          .toList(),
-      onChanged: (val) => setState(() => _selectedRol = val!),
     );
   }
 
