@@ -18,8 +18,8 @@ samples, guidance on mobile development, and a full API reference.
 ## Flujo de registro VitaCare
 
 - **Crear cuenta** abre `RegistroUsuarioPage` y envía los seis datos base a
-  `POST /api/users`; el servidor genera `id`. Solo se crea una fila en `users`.
-  El servidor asigna siempre el rol base `PACIENTE`, ignorando cualquier rol enviado
+  `POST /api/users`; PostgreSQL genera `id` con `BIGSERIAL`. Solo se crea una fila en `users`.
+  El servidor asigna siempre el rol inicial `PENDIENTE`, ignorando cualquier rol enviado
   por el cliente. El login solo solicita correo y contraseña.
 - Un administrador existente inicia sesión para abrir el dashboard. El botón
   **Registrar Paciente / Cuidador** abre el módulo avanzado. `POST /api/pacientes`
@@ -43,9 +43,29 @@ cd backend-vitacare
 npm ci
 node server.js
 # En otra terminal: pruebas de integración con datos temporales que se eliminan
-node --test test/registros.test.js
+node --test test/*.test.js
 ```
 
 Desde la raíz, con Flutter instalado: `flutter pub get`, `flutter test` y
 `flutter build web`. Se conservan las direcciones locales existentes para web y
 el emulador Android.
+
+## Migrar una base existente: IDs seriales y rol pendiente
+
+Ejecuta con autocommit en PostgreSQL (sin `--single-transaction`):
+
+```sh
+psql -d vitacare -f backend-vitacare/migrations/001_serial_ids_pending_role.sql
+```
+
+La migración conserva los IDs, roles y referencias existentes. Agrega `PENDIENTE`
+y configura una secuencia propia para `users.id`. En una tabla vacía, empieza en
+1; si hay filas, sincroniza el siguiente valor con `MAX(id) + 1` para evitar
+colisiones. Las secuencias pueden tener huecos después de errores o eliminaciones.
+No renumera los IDs históricos ni cambia retroactivamente los roles.
+Forzar `RESTART WITH 1` en una tabla con usuarios puede colisionar con IDs existentes.
+Para convertir IDs antiguos a 1, 2, 3, etc., hace falta otra migración que actualice
+las claves foráneas y cualquier referencia externa.
+
+El dashboard muestra `PENDIENTE · Sin perfil` en naranja hasta la clasificación
+administrativa. Las altas avanzadas siguen actualizando el rol al crear el perfil.

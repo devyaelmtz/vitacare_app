@@ -55,8 +55,6 @@ const sessions = new Map()
 const baseFields = ['email', 'password', 'nombre', 'app', 'apm', 'telefono']
 const validBase = body => body && typeof body === 'object' && baseFields.every(field =>
     typeof body[field] === 'string' && body[field].trim().length > 0)
-let lastId = 0
-const nextId = () => (lastId = Math.max(Date.now(), lastId + 1))
 
 async function requireAdmin(req, res, next) {
     try {
@@ -78,9 +76,9 @@ async function requireAdmin(req, res, next) {
 }
 
 const insertUser = `INSERT INTO users
-    (id, email, password, nombre, app, apm, telefono, rol)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`
-const userValues = (body, rol) => [nextId(), ...baseFields.map(field =>
+    (email, password, nombre, app, apm, telefono, rol)
+    VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`
+const userValues = (body, rol) => [...baseFields.map(field =>
     field === 'password' ? body[field] : body[field].trim()), rol]
 function registrationError(res, error) {
     if (error.code === '23505') return res.status(409).json({ error: 'El correo ya está registrado' })
@@ -97,7 +95,7 @@ app.post('/api/users', async (req, res) => {
         if (!validBase(req.body)) {
             return res.status(400).json({ error: 'Completa los datos de la cuenta' })
         }
-        const result = await pool.query(insertUser, userValues(req.body, 'PACIENTE'))
+        const result = await pool.query(insertUser, userValues(req.body, 'PENDIENTE'))
         const { password, ...user } = result.rows[0]
         res.status(201).json({ status: 'success', user })
     } catch (error) {

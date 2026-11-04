@@ -60,7 +60,7 @@ void main() {
             'app': 'Prueba',
             'apm': 'Local',
             'telefono': '5551111111',
-            'rol': 'PACIENTE',
+            'rol': 'PENDIENTE',
           },
         ]),
         200,
@@ -86,6 +86,13 @@ void main() {
       await tester.pumpAndSettle();
       expect(requests, 1);
       expect(find.text('Usuario Real Prueba'), findsOneWidget);
+      expect(find.text('PENDIENTE · Sin perfil'), findsOneWidget);
+      final badge = tester.widget<Container>(find
+          .ancestor(
+              of: find.text('PENDIENTE · Sin perfil'),
+              matching: find.byType(Container))
+          .first);
+      expect((badge.decoration as BoxDecoration).color, Colors.orange.shade800);
       expect(find.text('Juan Pérez'), findsNothing);
       await tester.tap(find.text('Registrar Paciente / Cuidador'));
       await tester.pumpAndSettle();

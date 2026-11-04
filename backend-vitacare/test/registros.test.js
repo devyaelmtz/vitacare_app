@@ -27,10 +27,13 @@ test('cuentas públicas y clasificación administrativa de usuarios existentes',
         const user = await create('base')
         await t.test('registro sin rol crea solo users y nunca acepta el rol del cliente', async () => {
             for (const rol of ['ADMIN', 'CUIDADOR']) {
-                const r = await request('/api/users', { ...makeUser(rol), rol, fechaNac: '2000-01-01' })
+                const r = await request('/api/users', { ...makeUser(rol), id: 9000000000000, rol, fechaNac: '2000-01-01' })
                 assert.equal(r.status, 201)
-                assert.equal(r.body.user.rol, 'PACIENTE')
+                assert.equal(r.body.user.rol, 'PENDIENTE')
                 assert.equal(r.body.user.password, undefined)
+                assert.notEqual(r.body.user.id, '9000000000000')
+                const stored = await pool.query('SELECT id FROM users WHERE email=$1', [r.body.user.email])
+                assert.equal(stored.rows[0].id, r.body.user.id)
                 for (const table of ['pacientes', 'cuidadores']) {
                     assert.equal((await pool.query(`SELECT * FROM ${table} WHERE usuario_id=$1`, [r.body.user.id])).rowCount, 0)
                 }
@@ -51,9 +54,9 @@ test('cuentas públicas y clasificación administrativa de usuarios existentes',
             }
         })
         const admin = makeUser('admin')
-        await pool.query(`INSERT INTO users (id,email,password,nombre,app,apm,telefono,rol)
-            VALUES ($1,$2,$3,$4,$5,$6,$7,'ADMIN')`,
-            [Date.now() + 10000000, admin.email, admin.password, admin.nombre, admin.app, admin.apm, admin.telefono])
+        await pool.query(`INSERT INTO users (email,password,nombre,app,apm,telefono,rol)
+            VALUES ($1,$2,$3,$4,$5,$6,'ADMIN')`,
+            [admin.email, admin.password, admin.nombre, admin.app, admin.apm, admin.telefono])
         const token = (await request('/api/login', admin)).body.token
         const medical = { fechaNac: '2000-01-01', contactoEmergencia: 'Contacto', telefonoEmergencia: '5551111111' }
         await t.test('vincula perfiles, cambia roles y conserva cuentas y datos base', async () => {

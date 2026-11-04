@@ -24,8 +24,8 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
 
   String get hostUrl =>
       (!kIsWeb && defaultTargetPlatform == TargetPlatform.android)
-      ? 'http://10.0.2.2:3000'
-      : 'http://localhost:3000';
+          ? 'http://10.0.2.2:3000'
+          : 'http://localhost:3000';
 
   @override
   void initState() {
@@ -212,18 +212,19 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                                             Container(
                                               padding:
                                                   const EdgeInsets.symmetric(
-                                                    horizontal: 8,
-                                                    vertical: 4,
-                                                  ),
+                                                horizontal: 8,
+                                                vertical: 4,
+                                              ),
                                               decoration: BoxDecoration(
-                                                color: _getColorPorRol(
-                                                  user.rol,
-                                                ),
+                                                color:
+                                                    _getColorPorRol(user.rol),
                                                 borderRadius:
                                                     BorderRadius.circular(8),
                                               ),
                                               child: Text(
-                                                user.rol,
+                                                user.rol == 'PENDIENTE'
+                                                    ? 'PENDIENTE · Sin perfil'
+                                                    : user.rol,
                                                 style: const TextStyle(
                                                   color: Colors.white,
                                                   fontSize: 12,
@@ -254,6 +255,8 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
 
   Color _getColorPorRol(String rol) {
     switch (rol.toUpperCase()) {
+      case 'PENDIENTE':
+        return Colors.orange.shade800;
       case 'ADMIN':
         return Colors.purple;
       case 'PACIENTE':
