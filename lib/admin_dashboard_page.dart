@@ -1,12 +1,16 @@
 import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
-import '../models/users.dart';
+import 'models/users.dart';
+import 'login_view.dart';
+import 'seleccion_registro_page.dart';
+import 'services/api_session.dart';
 
 class AdminDashboardPage extends StatefulWidget {
-  final User admin; 
+  final User admin;
 
   const AdminDashboardPage({super.key, required this.admin});
 
@@ -20,8 +24,8 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
 
   String get hostUrl =>
       (!kIsWeb && defaultTargetPlatform == TargetPlatform.android)
-          ? 'http://10.0.2.2:3000'
-          : 'http://localhost:3000';
+      ? 'http://10.0.2.2:3000'
+      : 'http://localhost:3000';
 
   @override
   void initState() {
@@ -34,29 +38,25 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
     setState(() => _estaCargando = true);
 
     try {
-      /* 
-      // DESCOMENTA ESTO CUANDO TU API TENGA LA RUTA /api/users LISTA
       final response = await http.get(Uri.parse('$hostUrl/api/users'));
-      
-      if (response.statusCode == 200) {
-        final List<dynamic> datos = jsonDecode(response.body);
-        setState(() {
-          _usuarios = datos.map((json) => User.fromJson(json)).toList();
-        });
+      if (response.statusCode != 200) {
+        throw Exception('No se pudieron obtener los usuarios');
       }
-      */
-
-      // DATOS DE PRUEBA (Borrar cuando conectes tu API)
-      await Future.delayed(const Duration(seconds: 1)); 
+      final List<dynamic> datos = jsonDecode(response.body);
+      if (!mounted) return;
       setState(() {
-        _usuarios = [
-          User(id: 1, email: 'paciente@test.com', password: '', nombre: 'Juan', app: 'Pérez', apm: 'Gómez', telefono: '5511223344', rol: 'PACIENTE'),
-          User(id: 2, email: 'cuidador@test.com', password: '', nombre: 'María', app: 'López', apm: 'Díaz', telefono: '5599887766', rol: 'CUIDADOR'),
-          widget.admin, 
-        ];
+        _usuarios = datos.map((json) => User.fromJson(json)).toList();
       });
     } catch (e) {
-      print('Error al cargar usuarios: $e');
+      if (!mounted) return;
+      setState(() => _usuarios = []);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'No se pudieron cargar los usuarios. Intenta actualizar.',
+          ),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _estaCargando = false);
     }
@@ -79,11 +79,30 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () {
-              Navigator.pop(context); // Regresa al Login
+              ApiSession.clear();
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (_) => const LoginView()),
+              );
             },
             tooltip: 'Cerrar sesión',
           ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: Colors.red,
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.person_add),
+        label: const Text('Registrar Paciente / Cuidador'),
+        onPressed: () async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const SeleccionRegistroPage(),
+            ),
+          );
+          if (mounted) _cargarUsuarios();
+        },
       ),
       body: _estaCargando
           ? const Center(child: CircularProgressIndicator(color: Colors.red))
@@ -92,7 +111,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
               padding: const EdgeInsets.all(20.0),
               child: Column(
                 // CAMBIO CLAVE: stretch fuerza a los elementos a abarcar todo el ancho
-                crossAxisAlignment: CrossAxisAlignment.stretch, 
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(
                     'Hola, ${widget.admin.nombre}',
@@ -110,7 +129,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                     textAlign: TextAlign.left,
                   ),
                   const SizedBox(height: 25),
-                  
+
                   // TABLA DE USUARIOS RESPONSIVA
                   Expanded(
                     child: Card(
@@ -136,29 +155,80 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                                       Colors.red.withOpacity(0.1),
                                     ),
                                     // Aumentamos el espaciado para que se vea más distribuido en pantallas grandes
-                                    columnSpacing: 40, 
+                                    columnSpacing: 40,
                                     columns: const [
-                                      DataColumn(label: Text('ID', style: TextStyle(fontWeight: FontWeight.bold))),
-                                      DataColumn(label: Text('Nombre', style: TextStyle(fontWeight: FontWeight.bold))),
-                                      DataColumn(label: Text('Rol', style: TextStyle(fontWeight: FontWeight.bold))),
-                                      DataColumn(label: Text('Correo', style: TextStyle(fontWeight: FontWeight.bold))),
-                                      DataColumn(label: Text('Teléfono', style: TextStyle(fontWeight: FontWeight.bold))),
+                                      DataColumn(
+                                        label: Text(
+                                          'ID',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                      DataColumn(
+                                        label: Text(
+                                          'Nombre',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                      DataColumn(
+                                        label: Text(
+                                          'Rol',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                      DataColumn(
+                                        label: Text(
+                                          'Correo',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                      DataColumn(
+                                        label: Text(
+                                          'Teléfono',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
                                     ],
                                     rows: _usuarios.map((user) {
                                       return DataRow(
                                         cells: [
                                           DataCell(Text(user.id.toString())),
-                                          DataCell(Text('${user.nombre} ${user.app}'.trim())),
+                                          DataCell(
+                                            Text(
+                                              '${user.nombre} ${user.app}'
+                                                  .trim(),
+                                            ),
+                                          ),
                                           DataCell(
                                             Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 8,
+                                                    vertical: 4,
+                                                  ),
                                               decoration: BoxDecoration(
-                                                color: _getColorPorRol(user.rol),
-                                                borderRadius: BorderRadius.circular(8),
+                                                color: _getColorPorRol(
+                                                  user.rol,
+                                                ),
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
                                               ),
                                               child: Text(
                                                 user.rol,
-                                                style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
                                               ),
                                             ),
                                           ),

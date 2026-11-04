@@ -1,4 +1,7 @@
 import 'dart:convert';
+
+import 'services/api_session.dart';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -20,7 +23,8 @@ class _RegistroPacientePageState extends State<RegistroPacientePage> {
   final TextEditingController passwordController = TextEditingController();
 
   final TextEditingController fechaNacController = TextEditingController();
-  final TextEditingController contactoEmergenciaController = TextEditingController();
+  final TextEditingController contactoEmergenciaController =
+      TextEditingController();
   final TextEditingController telEmergenciaController = TextEditingController();
 
   // Banderas de estado
@@ -30,8 +34,8 @@ class _RegistroPacientePageState extends State<RegistroPacientePage> {
   // Ajuste de IP dinámico: 10.0.2.2 para emuladores de Android
   String get hostUrl =>
       (!kIsWeb && defaultTargetPlatform == TargetPlatform.android)
-          ? 'http://10.0.2.2:3000'
-          : 'http://localhost:3000';
+      ? 'http://10.0.2.2:3000'
+      : 'http://localhost:3000';
 
   @override
   void dispose() {
@@ -49,12 +53,22 @@ class _RegistroPacientePageState extends State<RegistroPacientePage> {
 
   // MÉTODO PARA REGISTRAR EN EL BACKEND
   Future<void> _registrarPaciente() async {
-    // 1. Validación básica de campos vacíos
+    if (!ApiSession.isAdmin || _estaCargando) return;
+    // Validación de campos obligatorios
     if (nombreController.text.isEmpty ||
         emailController.text.isEmpty ||
         passwordController.text.isEmpty ||
-        telefonoController.text.isEmpty) {
-      _mostrarAlerta('Error', 'Por favor, completa al menos los campos obligatorios (Nombre, Correo, Contraseña, Teléfono).', true);
+        telefonoController.text.isEmpty ||
+        appController.text.trim().isEmpty ||
+        apmController.text.trim().isEmpty ||
+        fechaNacController.text.trim().isEmpty ||
+        contactoEmergenciaController.text.trim().isEmpty ||
+        telEmergenciaController.text.trim().isEmpty) {
+      _mostrarAlerta(
+        'Error',
+        'Por favor, completa todos los campos obligatorios.',
+        true,
+      );
       return;
     }
 
@@ -63,36 +77,40 @@ class _RegistroPacientePageState extends State<RegistroPacientePage> {
     try {
       // 2. Realizar la petición POST
       final response = await http.post(
-        Uri.parse('$hostUrl/api/users'),
-        headers: {'Content-Type': 'application/json'},
+        Uri.parse('$hostUrl/api/pacientes'),
+        headers: ApiSession.headers,
         body: jsonEncode({
           'email': emailController.text.trim(),
-          'password': passwordController.text.trim(),
+          'password': passwordController.text,
           'nombre': nombreController.text.trim(),
           'app': appController.text.trim(),
           'apm': apmController.text.trim(),
           'telefono': telefonoController.text.trim(),
           'rol': 'PACIENTE',
-          // Estos campos se envían, pero requerirán que actualices 
-          // tu backend en el futuro si deseas guardarlos en una tabla 'pacientes'
           'fechaNac': fechaNacController.text.trim(),
           'contactoEmergencia': contactoEmergenciaController.text.trim(),
           'telefonoEmergencia': telEmergenciaController.text.trim(),
         }),
       );
 
+      if (!mounted) return;
       final Map<String, dynamic> respuestaJson = jsonDecode(response.body);
 
       // 3. Evaluar respuesta del servidor (201 Created)
       if (response.statusCode == 201 && respuestaJson['status'] == 'success') {
         _mostrarAlerta('¡Éxito!', 'Paciente registrado correctamente.', false);
       } else {
-        String mensajeError = respuestaJson['error'] ?? 'Error al registrar el paciente.';
+        String mensajeError =
+            respuestaJson['error'] ?? 'Error al registrar el paciente.';
         _mostrarAlerta('Error', mensajeError, true);
       }
     } catch (e) {
-      print('Error de conexión: $e');
-      _mostrarAlerta('Error de Conexión', 'No se pudo conectar con el servidor.', true);
+      if (!mounted) return;
+      _mostrarAlerta(
+        'Error de Conexión',
+        'No se pudo conectar con el servidor.',
+        true,
+      );
     } finally {
       if (mounted) setState(() => _estaCargando = false);
     }
@@ -130,6 +148,11 @@ class _RegistroPacientePageState extends State<RegistroPacientePage> {
 
   @override
   Widget build(BuildContext context) {
+    if (!ApiSession.isAdmin) {
+      return const Scaffold(
+        body: Center(child: Text('Acceso exclusivo del administrador.')),
+      );
+    }
     return Scaffold(
       backgroundColor: const Color(0xFFFAFAFA),
       appBar: AppBar(
@@ -151,30 +174,78 @@ class _RegistroPacientePageState extends State<RegistroPacientePage> {
             children: [
               _crearTitulo('Datos del Paciente', Colors.red),
               _crearSizedBox(20),
-              _crearCampoTexto('Nombre(s)', 'Ingresa tu nombre', Icons.person, nombreController, TextInputType.name),
+              _crearCampoTexto(
+                'Nombre(s)',
+                'Ingresa tu nombre',
+                Icons.person,
+                nombreController,
+                TextInputType.name,
+              ),
               _crearSizedBox(15),
-              _crearCampoTexto('Apellido Paterno', 'Ingresa tu apellido paterno', Icons.person_outline, appController, TextInputType.name),
+              _crearCampoTexto(
+                'Apellido Paterno',
+                'Ingresa tu apellido paterno',
+                Icons.person_outline,
+                appController,
+                TextInputType.name,
+              ),
               _crearSizedBox(15),
-              _crearCampoTexto('Apellido Materno', 'Ingresa tu apellido materno', Icons.person_outline, apmController, TextInputType.name),
+              _crearCampoTexto(
+                'Apellido Materno',
+                'Ingresa tu apellido materno',
+                Icons.person_outline,
+                apmController,
+                TextInputType.name,
+              ),
               _crearSizedBox(15),
-              _crearCampoTexto('Teléfono', 'Ej. 5512345678', Icons.phone, telefonoController, TextInputType.phone),
+              _crearCampoTexto(
+                'Teléfono',
+                'Ej. 5512345678',
+                Icons.phone,
+                telefonoController,
+                TextInputType.phone,
+              ),
               _crearSizedBox(15),
-              _crearCampoTexto('Correo electrónico', 'ejemplo@correo.com', Icons.email, emailController, TextInputType.emailAddress),
+              _crearCampoTexto(
+                'Correo electrónico',
+                'ejemplo@correo.com',
+                Icons.email,
+                emailController,
+                TextInputType.emailAddress,
+              ),
               _crearSizedBox(15),
               _crearCampoPassword(),
-              
+
               _crearSizedBox(30),
 
               _crearTitulo('Información Médica', Colors.redAccent),
               _crearSizedBox(20),
-              _crearCampoTexto('Fecha de Nacimiento', 'YYYY-MM-DD', Icons.calendar_today, fechaNacController, TextInputType.datetime),
+              _crearCampoTexto(
+                'Fecha de Nacimiento',
+                'YYYY-MM-DD',
+                Icons.calendar_today,
+                fechaNacController,
+                TextInputType.datetime,
+              ),
               _crearSizedBox(15),
-              _crearCampoTexto('Contacto de Emergencia', 'Nombre del contacto', Icons.health_and_safety, contactoEmergenciaController, TextInputType.name),
+              _crearCampoTexto(
+                'Contacto de Emergencia',
+                'Nombre del contacto',
+                Icons.health_and_safety,
+                contactoEmergenciaController,
+                TextInputType.name,
+              ),
               _crearSizedBox(15),
-              _crearCampoTexto('Teléfono de Emergencia', 'Ej. 5512345678', Icons.contact_phone, telEmergenciaController, TextInputType.phone),
-              
+              _crearCampoTexto(
+                'Teléfono de Emergencia',
+                'Ej. 5512345678',
+                Icons.contact_phone,
+                telEmergenciaController,
+                TextInputType.phone,
+              ),
+
               _crearSizedBox(35),
-              
+
               // BOTÓN FINAL CON ESTADO DE CARGA
               _crearBoton('REGISTRAR PACIENTE'),
             ],
@@ -198,7 +269,13 @@ class _RegistroPacientePageState extends State<RegistroPacientePage> {
     );
   }
 
-  Widget _crearCampoTexto(String label, String hint, IconData icono, TextEditingController controller, TextInputType tipoTeclado) {
+  Widget _crearCampoTexto(
+    String label,
+    String hint,
+    IconData icono,
+    TextEditingController controller,
+    TextInputType tipoTeclado,
+  ) {
     return TextField(
       controller: controller,
       keyboardType: tipoTeclado,
@@ -206,9 +283,7 @@ class _RegistroPacientePageState extends State<RegistroPacientePage> {
         labelText: label,
         hintText: hint,
         prefixIcon: Icon(icono),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-        ),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
       ),
     );
   }
@@ -220,13 +295,9 @@ class _RegistroPacientePageState extends State<RegistroPacientePage> {
       decoration: InputDecoration(
         labelText: 'Contraseña',
         prefixIcon: const Icon(Icons.lock),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-        ),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
         suffixIcon: IconButton(
-          icon: Icon(
-            mostrarPassword ? Icons.visibility : Icons.visibility_off,
-          ),
+          icon: Icon(mostrarPassword ? Icons.visibility : Icons.visibility_off),
           onPressed: () {
             setState(() {
               mostrarPassword = !mostrarPassword;
@@ -242,7 +313,9 @@ class _RegistroPacientePageState extends State<RegistroPacientePage> {
       width: double.infinity,
       height: 55,
       child: ElevatedButton(
-        onPressed: _estaCargando ? null : _registrarPaciente, // Se desactiva si está cargando
+        onPressed: _estaCargando
+            ? null
+            : _registrarPaciente, // Se desactiva si está cargando
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.red,
           foregroundColor: Colors.white,

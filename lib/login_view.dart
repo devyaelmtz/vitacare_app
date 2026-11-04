@@ -1,10 +1,13 @@
 import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+
 import 'admin_dashboard_page.dart';
-import '../models/users.dart';
-import 'seleccion_registro_page.dart';
+import 'models/users.dart';
+import 'registro_usuario_page.dart';
+import 'services/api_session.dart';
 import './components/alerta.dart';
 
 class LoginView extends StatefulWidget {
@@ -40,7 +43,7 @@ class _LoginViewState extends State<LoginView> {
 
   void _submitLogin() {
     final String email = _emailController.text.trim();
-    final String password = _passwordController.text.trim();
+    final String password = _passwordController.text;
 
     if (email.isEmpty || password.isEmpty) {
       mostrarAlertaGlobal(
@@ -69,7 +72,7 @@ class _LoginViewState extends State<LoginView> {
 
   void _intentarLogin() async {
     final String email = _emailController.text.trim();
-    final String password = _passwordController.text.trim();
+    final String password = _passwordController.text;
 
     setState(() => _estaCargando = true);
 
@@ -77,10 +80,7 @@ class _LoginViewState extends State<LoginView> {
       final response = await http.post(
         Uri.parse('$hostUrl/api/login'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'email': email,
-          'password': password,
-        }),
+        body: jsonEncode({'email': email, 'password': password}),
       );
 
       Map<String, dynamic> respuestaJson;
@@ -95,21 +95,25 @@ class _LoginViewState extends State<LoginView> {
 
         try {
           User usuarioValido = User.fromJson(datoUsuario);
+          ApiSession.token = respuestaJson['token'] as String?;
+          ApiSession.rol = usuarioValido.rol;
 
           if (mounted) {
             if (usuarioValido.rol == 'ADMIN') {
               Navigator.pushReplacement(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => AdminDashboardPage(admin: usuarioValido),
+                  builder: (context) =>
+                      AdminDashboardPage(admin: usuarioValido),
                 ),
               );
             } else {
-              Navigator.pushReplacement(
+              mostrarAlertaGlobal(
                 context,
-                MaterialPageRoute(
-                  builder: (context) => const SeleccionRegistroPage(),
-                ),
+                'Bienvenido, ${usuarioValido.nombre}.',
+                icono: Icons.check_circle_outline,
+                colorIcono: Colors.green,
+                titulo: 'Sesión iniciada',
               );
             }
           }
@@ -179,7 +183,7 @@ class _LoginViewState extends State<LoginView> {
                 _crearSizedBox(20),
                 _crearCampoPassword(),
                 _crearSizedBox(20),
-                _crearCampoRol(), 
+                _crearCampoRol(),
                 _crearSizedBox(10),
                 _crearOpciones(),
                 _crearSizedBox(20),
@@ -200,7 +204,11 @@ class _LoginViewState extends State<LoginView> {
       width: 200,
       height: 200,
       errorBuilder: (context, error, stackTrace) {
-        return const Icon(Icons.health_and_safety, size: 150, color: Colors.red);
+        return const Icon(
+          Icons.health_and_safety,
+          size: 150,
+          color: Colors.red,
+        );
       },
     );
   }
@@ -243,9 +251,7 @@ class _LoginViewState extends State<LoginView> {
         prefixIcon: const Icon(Icons.lock),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
         suffixIcon: IconButton(
-          icon: Icon(
-            mostrarPassword ? Icons.visibility : Icons.visibility_off,
-          ),
+          icon: Icon(mostrarPassword ? Icons.visibility : Icons.visibility_off),
           onPressed: () {
             setState(() {
               mostrarPassword = !mostrarPassword;
@@ -262,7 +268,7 @@ class _LoginViewState extends State<LoginView> {
 
   Widget _crearCampoRol() {
     return DropdownButtonFormField<String>(
-      initialValue: _selectedRol, 
+      initialValue: _selectedRol,
       decoration: InputDecoration(
         labelText: 'Tipo de Usuario',
         prefixIcon: const Icon(Icons.manage_accounts),
@@ -292,9 +298,11 @@ class _LoginViewState extends State<LoginView> {
             const Text('Recordarme'),
           ],
         ),
-        TextButton(
-          onPressed: () {},
-          child: const Text('¿Olvidaste tu contraseña?'),
+        Flexible(
+          child: TextButton(
+            onPressed: () {},
+            child: const Text('¿Olvidaste tu contraseña?'),
+          ),
         ),
       ],
     );
@@ -317,10 +325,7 @@ class _LoginViewState extends State<LoginView> {
             ? const CircularProgressIndicator(color: Colors.white)
             : const Text(
                 'INICIAR SESIÓN',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
       ),
     );
@@ -330,21 +335,19 @@ class _LoginViewState extends State<LoginView> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        const Text('¿No tienes una cuenta?'),
+        const Flexible(child: Text('¿No tienes una cuenta?')),
         TextButton(
           onPressed: () {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (context) => const SeleccionRegistroPage(),
+                builder: (context) => const RegistroUsuarioPage(),
               ),
             );
           },
           child: const Text(
             'Crear cuenta',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-            ),
+            style: TextStyle(fontWeight: FontWeight.bold),
           ),
         ),
       ],

@@ -1,6 +1,7 @@
 const express = require('express') //Establecer servicios de API REST y conexión a base de datos | Node.js
 const { Pool } = require('pg') //Crear la ruta para la  y grupo de conexiones: Postgres
 // const multer = require('multer') //Procesar datos/archivos sensibles (usuario, contraseña, correo, imágenes, etc)
+const { randomUUID } = require('node:crypto')
 const path = require('path') //Ruta del modulo nativo de node.js
 const cors = require('cors') //Leer formatos de json | Hacer conexión de dos servidores locales para entrar a la aplicación
 
@@ -40,7 +41,7 @@ app.get('/api/users', async (req, res) => {
     try {
         const resultado =
             await
-                pool.query(`SELECT * FROM users
+                pool.query(`SELECT id, email, nombre, app, apm, telefono, rol, created_at FROM users
             ORDER BY id DESC`)
         res.json(resultado.rows)
     } catch (error) {
@@ -50,49 +51,99 @@ app.get('/api/users', async (req, res) => {
     }
 })
 
-app.post('/api/users', /*upload.single('imagen'),*/
-    async (req, res) => {
-        try {
-            const { email, password, nombre, app, apm, telefono, rol }
-                = req.body
-            /*
-            if (!req.file) {
-                return
-                res.status(400).json(
-                    { error: 'La imagen es requerida' })
-            }
-    
-            const host = req.headers.host
-            const rutaImagen = `http://${host}/uploads/${req.file.filename}` //interpolacion ${variable}
-            */
+const sessions = new Map()
+const baseFields = ['email', 'password', 'nombre', 'app', 'apm', 'telefono']
+const validBase = body => body && typeof body === 'object' && baseFields.every(field =>
+    typeof body[field] === 'string' && body[field].trim().length > 0)
+let lastId = 0
+const nextId = () => (lastId = Math.max(Date.now(), lastId + 1))
 
-            const query = `
-        INSERT INTO users
-        (id, email, password, nombre, app, apm, telefono, rol)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *;
-        `
-            const values = [Date.now(), email, password, nombre, app, apm, telefono, rol]
-            const resultado = await pool.query(query, values)
-
-            res.status(201).json({
-                status: 'success', // <-- Se corrigió 'succes' por 'success' aquí también para consistencia
-                user: resultado.rows[0]
-            })
-        } catch (error) {
-            console.error(error)
-            res.status(500).json(
-                { error: 'Error interno del servidor' })
+async function requireAdmin(req, res, next) {
+    try {
+        const token = req.headers.authorization?.replace(/^Bearer /, '')
+        const session = sessions.get(token)
+        if (!session || session.expires <= Date.now()) {
+            if (token) sessions.delete(token)
+            return res.status(401).json({ error: 'Inicia sesión como administrador' })
         }
-    })
+        const result = await pool.query('SELECT rol FROM users WHERE id = $1', [session.id])
+        if (result.rows[0]?.rol !== 'ADMIN') {
+            return res.status(403).json({ error: 'Acceso exclusivo del administrador' })
+        }
+        next()
+    } catch (error) {
+        console.error(error)
+        res.status(500).json({ error: 'Error al verificar permisos' })
+    }
+}
 
-const PORT = 3000
-app.listen(PORT, () => { //función callback
-    console.log(`Servidor de usuarios
-        corriendo in http://localhost:${PORT}`)
+const insertUser = `INSERT INTO users
+    (id, email, password, nombre, app, apm, telefono, rol)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`
+const userValues = (body, rol) => [nextId(), ...baseFields.map(field =>
+    field === 'password' ? body[field] : body[field].trim()), rol]
+function registrationError(res, error) {
+    if (error.code === '23505') return res.status(409).json({ error: 'El correo ya está registrado' })
+    if (['22007', '22008', '22001', '22P02', '23502'].includes(error.code)) {
+        return res.status(400).json({ error: 'Revisa los datos del registro' })
+    }
+    console.error(error)
+    res.status(500).json({ error: 'Error al registrar la cuenta' })
+}
+
+// Registro público: crea exclusivamente la cuenta base, nunca perfiles ni administradores.
+app.post('/api/users', async (req, res) => {
+    try {
+        if (!validBase(req.body) || !['PACIENTE', 'CUIDADOR'].includes(req.body.rol)) {
+            return res.status(400).json({ error: 'Completa los datos y selecciona PACIENTE o CUIDADOR' })
+        }
+        const result = await pool.query(insertUser, userValues(req.body, req.body.rol))
+        const { password, ...user } = result.rows[0]
+        res.status(201).json({ status: 'success', user })
+    } catch (error) {
+        registrationError(res, error)
+    }
 })
 
+// Una única conexión garantiza que cuenta y perfil se guarden de forma atómica.
+for (const tipo of ['pacientes', 'cuidadores']) {
+    app.post(`/api/${tipo}`, requireAdmin, async (req, res) => {
+        let client
+        try {
+            const body = req.body
+            if (!validBase(body) || (tipo === 'pacientes' &&
+                !['fechaNac', 'contactoEmergencia', 'telefonoEmergencia'].every(
+                    field => typeof body[field] === 'string' && body[field].trim()))) {
+                return res.status(400).json({ error: 'Completa todos los campos obligatorios' })
+            }
+            client = await pool.connect()
+            await client.query('BEGIN')
+            const result = await client.query(insertUser,
+                userValues(body, tipo === 'pacientes' ? 'PACIENTE' : 'CUIDADOR'))
+            const { password, ...user } = result.rows[0]
+            if (tipo === 'pacientes') {
+                await client.query(`INSERT INTO pacientes
+                    (usuario_id, fecha_nac, contacto_emergencia, telefono_emergencia)
+                    VALUES ($1, $2, $3, $4)`,
+                    [user.id, body.fechaNac, body.contactoEmergencia, body.telefonoEmergencia])
+            } else {
+                await client.query(`INSERT INTO cuidadores
+                    (usuario_id, numero_licencia, parentesco_relacion) VALUES ($1, $2, $3)`,
+                    [user.id, body.numeroLicencia || null, body.parentescoRelacion || null])
+            }
+            await client.query('COMMIT')
+            res.status(201).json({ status: 'success', user })
+        } catch (error) {
+            if (client) await client.query('ROLLBACK')
+            registrationError(res, error)
+        } finally {
+            if (client) client.release()
+        }
+    })
+}
+
 // 3. Modificar un usuario (PUT)
-app.put('/api/users/:id', async (req, res) => {
+app.put('/api/users/:id', requireAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         const { email, password, nombre, app, apm, telefono, rol } = req.body;
@@ -118,7 +169,7 @@ app.put('/api/users/:id', async (req, res) => {
 });
 
 // 4. Eliminar un usuario (DELETE)
-app.delete('/api/users/:id', async (req, res) => {
+app.delete('/api/users/:id', requireAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         const resultado = await pool.query('DELETE FROM users WHERE id = $1 RETURNING *;', [id]);
@@ -159,9 +210,15 @@ app.post('/api/login', async (req, res) => {
 
         if (resultado.rows.length > 0) {
             const usuarioEncontrado = resultado.rows[0];
+            const token = randomUUID();
+            for (const [key, session] of sessions) {
+                if (session.expires <= Date.now()) sessions.delete(key);
+            }
+            sessions.set(token, { id: usuarioEncontrado.id, expires: Date.now() + 8 * 60 * 60 * 1000 });
             return res.status(200).json({
                 status: 'success',
                 message: 'Autenticación exitosa',
+                token,
                 usuario: {
                     id: usuarioEncontrado.id,
                     email: usuarioEncontrado.email,
@@ -206,3 +263,8 @@ app.get('/api/users/:id', async (req, res) => {
         res.status(500).json({ error: 'Error al obtener el usuario' });
     }
 });
+if (require.main === module) {
+    const PORT = 3000
+    app.listen(PORT, () => console.log(`Servidor de usuarios en puerto ${PORT}`))
+}
+module.exports = { app, pool }
